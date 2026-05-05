@@ -1,16 +1,33 @@
-# A2A Protocol Inspector
+# A2A Inspector
 
-The A2A Inspector is a web-based tool designed to help developers inspect, debug, and validate servers that implement the A2A (Agent2Agent) protocol. It provides a user-friendly interface to interact with an A2A agent, view communication, and ensure specification compliance.
+The A2A Inspector is a web-based tool for inspecting, debugging, and validating servers that implement the A2A (Agent2Agent) protocol. It gives developers a focused workspace for connecting to an agent, sending requests, reviewing responses, and checking protocol compliance.
 
 The application is built with a FastAPI backend and a TypeScript frontend.
 
 ## Features
 
-- **Connect to a local A2A Agent:** Specify the base URL of any agent server to connect (e.g., `http://localhost:5555`).
-- **View Agent Card:** Automatically fetches and displays the agent's card.
-- **Spec Compliance Checks:** Performs basic validation on the agent card to ensure it adheres to the A2A specification.
-- **Live Chat:** A chat interface to send and receive messages with the connected agent.
-- **Debug Console:** A slide-out console shows the raw JSON-RPC 2.0 messages sent and received between the inspector and the agent server.
+- **Saved connections:** Store and reuse agent endpoints, authentication settings, and custom headers.
+- **Dialog history:** Keep conversations per saved profile, replay prior dialogs, and resume with the preserved context ID.
+- **Agent card validation:** Fetch the agent card, display it as JSON, and surface validation errors.
+- **Chat workspace:** Send messages and file attachments from a focused chat panel.
+- **Request editor:** Inspect and edit the request body JSON before sending, including metadata and selected tools.
+- **Response inspector:** Review formatted responses, raw payloads, timeline events, and logs side by side.
+- **Protocol debugging:** Capture request, response, validation, and error logs for deeper troubleshooting.
+
+## Interface Overview
+
+The workspace is organized into three primary areas:
+
+- **Top bar:** Shows the active connection, connection status, saved connection manager, and theme toggle.
+- **Left sidebar:** Lists saved dialogs for the active profile and lets you start a new dialog.
+- **Main workspace:** Provides the chat, request body, and tools tabs.
+- **Response panel:** Shows the latest response metadata, pretty/raw payloads, timeline, and logs.
+
+![A2A Inspector workspace](docs/images/inspector-workspace.png)
+
+The connection manager keeps endpoint, auth, and header settings together so repeated local testing is quick.
+
+![Connection profile dialog](docs/images/connection-profile.png)
 
 ## Prerequisites
 
@@ -132,4 +149,7 @@ The container is now running in the background. Open your web browser and naviga
 
 ### 4. Inspect your agents
 
-- Try inputting a sample agent URL such as `https://sample-a2a-agent-908687846511.us-central1.run.app`
+- Open **Connections** and add an agent endpoint such as `http://127.0.0.1:5555`.
+- Save the profile if you want dialog history to persist for that endpoint.
+- Use **Chat** for regular message testing, **Body** for request JSON inspection, and **Tools** to toggle tool metadata.
+- Check the **Response** panel for formatted output, raw payloads, timeline entries, and logs.
