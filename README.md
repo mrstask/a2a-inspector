@@ -98,6 +98,25 @@ bash scripts/run.sh
 
 This will start both the frontend build process and backend server, displaying their outputs with colored prefixes. Press `Ctrl+C` to stop both services.
 
+**On Windows (PowerShell):**
+
+```powershell
+# From the root of the project
+powershell -ExecutionPolicy Bypass -File scripts\run.ps1
+```
+
+If PowerShell blocks the script with an execution-policy error, either run the command above (which bypasses the policy for that invocation only) or allow local scripts for the current user once:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+```
+
+The PowerShell script mirrors `run.sh`: it starts the frontend in watch mode, then the backend, and stops both on `Ctrl+C`. It requires `uv` and `npm` to be on your `PATH`.
+
+**On Windows (Git Bash / WSL):**
+
+`scripts/run.sh` works as-is from Git Bash or WSL — use the same `bash scripts/run.sh` command shown above.
+
 **Or manually in separate terminals:**
 
 Make sure you are in the root directory of the project (`a2a-inspector`) before starting.
@@ -121,6 +140,8 @@ cd backend
 # Run the FastAPI server with live reload
 uv run app.py
 ```
+
+On Windows the same commands work in PowerShell or `cmd.exe` — just use backslashes (`cd .\frontend`, `cd .\backend`) if you prefer.
 
 ##### Access the Inspector
 

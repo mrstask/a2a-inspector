@@ -69,8 +69,10 @@ BACKEND_PID=$!
 cd - > /dev/null || exit
 
 echo -e "${GREEN}A2A Inspector is running!${NC}"
-echo -e "${YELLOW}Frontend PID: $FRONTEND_PID${NC}"
-echo -e "${YELLOW}Backend PID: $BACKEND_PID${NC}"
+echo -e "${GREEN}Open http://127.0.0.1:5001 in your browser${NC}"
+echo -e "${YELLOW}(The frontend has no separate port — assets are built into ./frontend/public and served by the backend on 5001.)${NC}"
+echo -e "${YELLOW}Frontend build PID: $FRONTEND_PID${NC}"
+echo -e "${YELLOW}Backend server PID: $BACKEND_PID (listening on 127.0.0.1:5001)${NC}"
 echo -e "${YELLOW}Press Ctrl+C to stop both services${NC}"
 
 # Monitor both processes
