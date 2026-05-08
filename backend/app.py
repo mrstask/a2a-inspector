@@ -308,9 +308,16 @@ async def handle_initialize_client(sid: str, data: dict[str, Any]) -> None:
         # Clean up httpx_client
         if httpx_client is not None:
             await httpx_client.aclose()
-        await sio.emit(
-            'client_initialized', {'status': 'error', 'message': str(e)}, to=sid
-        )
+        http_status: int | None = None
+        response = getattr(e, 'response', None)
+        if response is not None:
+            status_code = getattr(response, 'status_code', None)
+            if isinstance(status_code, int):
+                http_status = status_code
+        payload: dict[str, Any] = {'status': 'error', 'message': str(e)}
+        if http_status is not None:
+            payload['httpStatus'] = http_status
+        await sio.emit('client_initialized', payload, to=sid)
 
 
 @sio.on('send_message')

@@ -5,6 +5,7 @@ import {upsertImplicit, upsertProfile, getProfile} from './storage/profiles';
 import {isAvailable as idbAvailable} from './storage/db';
 import {setLastProfileId} from './storage/prefs';
 import {mountTopbar, type MountedTopbar} from './ui/topbar';
+import {showReauthDialog} from './ui/reauth-dialog';
 import {mountSidebar, type MountedSidebar} from './ui/sidebar';
 import {mountTabs} from './ui/tabs';
 import {
@@ -963,7 +964,88 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
-  connectBtn.addEventListener('click', async () => {
+  function detectBearerToken(headers: Record<string, string>): string | null {
+    const entry = Object.entries(headers).find(
+      ([k]) => k.toLowerCase() === 'authorization',
+    );
+    if (!entry) return null;
+    const match = /^Bearer\s+(.+)$/i.exec(entry[1]);
+    return match ? match[1].trim() : null;
+  }
+
+  function applyNewBearerToken(newToken: string): void {
+    if (authTypeSelect.value === 'bearer') {
+      let input = document.getElementById(
+        'bearer-token',
+      ) as HTMLInputElement | null;
+      if (!input) {
+        renderAuthInputs('bearer');
+        input = document.getElementById(
+          'bearer-token',
+        ) as HTMLInputElement | null;
+      }
+      if (input) input.value = newToken;
+      return;
+    }
+    const items = headersList.querySelectorAll('.header-item');
+    for (const item of Array.from(items)) {
+      const nameEl = item.querySelector('.header-name') as HTMLInputElement | null;
+      const valueEl = item.querySelector(
+        '.header-value',
+      ) as HTMLInputElement | null;
+      if (nameEl && nameEl.value.toLowerCase() === 'authorization' && valueEl) {
+        valueEl.value = `Bearer ${newToken}`;
+        return;
+      }
+    }
+    authTypeSelect.value = 'bearer';
+    renderAuthInputs('bearer');
+    const created = document.getElementById(
+      'bearer-token',
+    ) as HTMLInputElement | null;
+    if (created) created.value = newToken;
+  }
+
+  let pendingBearerToken: string | null = null;
+  let reauthInFlight = false;
+
+  async function maybePromptReauth(
+    status: number | string,
+    message: string | undefined,
+    bearerToken: string | null,
+  ): Promise<boolean> {
+    if (reauthInFlight) return false;
+    if (!bearerToken) return false;
+    const code = typeof status === 'number' ? status : Number(status);
+    if (code !== 401 && code !== 403) return false;
+    reauthInFlight = true;
+    try {
+      const profileId = topbar?.getActiveProfileId() ?? null;
+      let connectionName: string | undefined;
+      if (profileId) {
+        try {
+          const p = await getProfile(profileId);
+          connectionName = p?.name;
+        } catch {
+          /* ignore */
+        }
+      }
+      const result = await showReauthDialog({
+        status: code,
+        connectionName,
+        currentToken: bearerToken,
+        errorMessage: message,
+      });
+      if (!result) return false;
+      applyNewBearerToken(result.token);
+      window.setTimeout(() => runConnect(), 0);
+      return true;
+    } finally {
+      reauthInFlight = false;
+    }
+  }
+
+  async function runConnect(): Promise<void> {
     let agentCardUrl = agentCardUrlInput.value.trim();
     if (!agentCardUrl) {
       alert('Please enter an agent card URL.');
@@ -1015,6 +1097,8 @@ document.addEventListener('DOMContentLoaded', () => {
       'Content-Type': 'application/json',
       ...customHeaders,
     };
+    const bearerInUse = detectBearerToken(customHeaders);
+    pendingBearerToken = bearerInUse;
 
     try {
       const response = await fetch('/agent-card', {
@@ -1024,6 +1108,17 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       const data = await response.json();
       if (!response.ok) {
+        if (
+          (response.status === 401 || response.status === 403) &&
+          bearerInUse
+        ) {
+          const handled = await maybePromptReauth(
+            response.status,
+            data?.error,
+            bearerInUse,
+          );
+          if (handled) return;
+        }
         throw new Error(data.error || `HTTP error! status: ${response.status}`);
       }
       setResponsePayload(
@@ -1106,6 +1201,10 @@ document.addEventListener('DOMContentLoaded', () => {
       chatInput.disabled = true;
       sendBtn.disabled = true;
     }
+  }
+
+  connectBtn.addEventListener('click', () => {
+    runConnect().catch(err => console.warn('Connect failed:', err));
   });
 
   socket.on(
@@ -1113,6 +1212,7 @@ document.addEventListener('DOMContentLoaded', () => {
     (data: {
       status: string;
       message?: string;
+      httpStatus?: number;
       transport?: string;
       inputModes?: string[];
       outputModes?: string[];
@@ -1173,6 +1273,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setResponsePayload(
           {
             error: data.message ?? 'Client initialization failed.',
+            httpStatus: data.httpStatus,
             phase: 'client-initialization',
           },
           'error',
@@ -1180,6 +1281,16 @@ document.addEventListener('DOMContentLoaded', () => {
         );
         document.body.classList.remove('is-connected');
         updateSessionUI();
+        if (
+          (data.httpStatus === 401 || data.httpStatus === 403) &&
+          pendingBearerToken
+        ) {
+          maybePromptReauth(
+            data.httpStatus,
+            data.message,
+            pendingBearerToken,
+          ).catch(err => console.warn('Reauth prompt failed:', err));
+        }
       }
     },
   );

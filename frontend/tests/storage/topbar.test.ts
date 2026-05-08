@@ -100,7 +100,7 @@ describe('ui/topbar', () => {
       readFromForm: vi.fn(() => ({agentCardUrl: '', customHeaders: []})),
     });
     const select = root.querySelector<HTMLSelectElement>(
-      '#topbar-profile-select',
+      '#topbar-inline-select',
     )!;
     select.value = p.id;
     select.dispatchEvent(new Event('change'));

@@ -1813,6 +1813,120 @@ body.dark-mode.layout-v2 .slider {
     background: rgba(192, 57, 43, 0.08);
 }
 
+body.layout-v2 .topbar-conn-group {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+    margin-right: 12px;
+    flex: 0 0 auto;
+}
+
+body.layout-v2 .topbar-conn-group > * {
+    flex: 0 0 auto;
+}
+
+body.layout-v2 .topbar-inline-select {
+    width: auto;
+    min-width: 200px;
+    max-width: 280px;
+    height: 32px;
+    padding: 0 28px 0 10px;
+    font-size: 13px;
+}
+
+body.layout-v2 .topbar-inline-connect {
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+}
+
+body.layout-v2 .topbar-conn-group .topbar-btn {
+    height: 32px;
+}
+
+body.layout-v2 .topbar-conn-group #connect-btn {
+    height: 32px;
+    padding: 0 16px;
+    font-size: 13px;
+    width: auto;
+    flex: 0 0 auto;
+}
+
+/* ===== Reauth dialog ===== */
+.reauth-modal {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(15, 23, 42, 0.45);
+    box-sizing: border-box;
+    z-index: 80;
+}
+
+.reauth-modal[hidden] {
+    display: none;
+}
+
+.reauth-modal-panel {
+    width: min(480px, 100%);
+    border: 1px solid var(--v2-border);
+    border-radius: 8px;
+    background: var(--v2-panel-bg);
+    box-shadow: var(--v2-shadow);
+    display: flex;
+    flex-direction: column;
+}
+
+.reauth-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 18px 12px;
+    border-bottom: 1px solid var(--v2-border);
+}
+
+.reauth-modal-header h2 {
+    margin: 0;
+    font-size: 16px;
+    color: var(--v2-text);
+}
+
+.reauth-modal-body {
+    display: grid;
+    gap: 12px;
+    padding: 16px 18px;
+}
+
+.reauth-modal-message {
+    margin: 0;
+    color: var(--v2-text);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.reauth-show-token {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--v2-text-muted);
+    font-size: 12px;
+}
+
+.reauth-modal-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 14px 18px;
+    border-top: 1px solid var(--v2-border);
+    background: var(--v2-panel-soft);
+}
+
 /* ===== Sidebar ===== */
 body.layout-v2 .sidebar-root {
     display: flex !important;

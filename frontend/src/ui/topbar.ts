@@ -47,13 +47,14 @@ const TEMPLATE = `
       <span class="topbar-brand-mark">A2A</span>
       <span class="topbar-brand-name">Inspector</span>
     </div>
-    <div class="topbar-current">
-      <span class="topbar-current-label">Connection</span>
-      <span id="topbar-current-name" class="topbar-current-name">No connection selected</span>
-    </div>
     <span id="topbar-status" class="topbar-status" aria-live="polite" data-status="idle">Idle</span>
     <div class="topbar-spacer"></div>
-    <button type="button" id="topbar-connection-btn" class="topbar-btn topbar-btn-primary">Connections</button>
+    <div class="topbar-conn-group" role="group" aria-label="Connection controls">
+      <select id="topbar-inline-select" class="topbar-select topbar-inline-select" aria-label="Saved connection"></select>
+      <div class="topbar-inline-connect" data-slot="connect"></div>
+      <button type="button" id="topbar-new-inline-btn" class="topbar-btn" title="Create a new connection">+ New</button>
+      <button type="button" id="topbar-edit-inline-btn" class="topbar-btn" title="Edit selected connection" disabled>Edit</button>
+    </div>
     <div class="topbar-theme-slot" data-slot="theme"></div>
   </div>
   <div class="connection-modal" id="topbar-connection-modal" hidden>
@@ -61,15 +62,11 @@ const TEMPLATE = `
       <div class="connection-modal-header">
         <div>
           <h2 id="connection-modal-title">Agent connection</h2>
-          <p>Create or edit the endpoint used by the inspector.</p>
+          <p id="connection-modal-subtitle">Create or edit the endpoint used by the inspector.</p>
         </div>
         <button type="button" id="topbar-close-btn" class="topbar-icon-btn" aria-label="Close connection popup">×</button>
       </div>
       <div class="connection-modal-body">
-        <label class="connection-field">
-          <span>Saved connection</span>
-          <select id="topbar-profile-select" class="topbar-select" aria-label="Saved connection"></select>
-        </label>
         <label class="connection-field">
           <span>Name</span>
           <input id="topbar-profile-name" class="topbar-input" type="text" placeholder="Local assistant" aria-label="Connection name" />
@@ -81,10 +78,10 @@ const TEMPLATE = `
         <div class="connection-auth-slot" data-slot="headersPanel"></div>
       </div>
       <div class="connection-modal-actions">
-        <button type="button" id="topbar-new-btn" class="topbar-btn">Clear</button>
         <button type="button" id="topbar-delete-btn" class="topbar-btn topbar-btn-danger">Delete</button>
-        <button type="button" id="topbar-save-btn" class="topbar-btn">Save</button>
-        <div class="topbar-connect-slot" data-slot="connect"></div>
+        <div class="topbar-spacer"></div>
+        <button type="button" id="topbar-cancel-btn" class="topbar-btn">Close</button>
+        <button type="button" id="topbar-save-btn" class="topbar-btn topbar-btn-primary">Save</button>
       </div>
     </div>
   </div>
@@ -99,11 +96,14 @@ export async function mountTopbar(
   hooks: TopbarHooks,
 ): Promise<MountedTopbar> {
   root.innerHTML = TEMPLATE;
-  const select = root.querySelector<HTMLSelectElement>(
-    '#topbar-profile-select',
+  const inlineSelect = root.querySelector<HTMLSelectElement>(
+    '#topbar-inline-select',
   )!;
-  const connectionBtn = root.querySelector<HTMLButtonElement>(
-    '#topbar-connection-btn',
+  const inlineNewBtn = root.querySelector<HTMLButtonElement>(
+    '#topbar-new-inline-btn',
+  )!;
+  const inlineEditBtn = root.querySelector<HTMLButtonElement>(
+    '#topbar-edit-inline-btn',
   )!;
   const modal = root.querySelector<HTMLDivElement>(
     '#topbar-connection-modal',
@@ -111,21 +111,23 @@ export async function mountTopbar(
   const modalPanel = root.querySelector<HTMLDivElement>(
     '.connection-modal-panel',
   )!;
+  const modalSubtitle = root.querySelector<HTMLParagraphElement>(
+    '#connection-modal-subtitle',
+  )!;
   const closeBtn = root.querySelector<HTMLButtonElement>(
     '#topbar-close-btn',
+  )!;
+  const cancelBtn = root.querySelector<HTMLButtonElement>(
+    '#topbar-cancel-btn',
   )!;
   const nameInput = root.querySelector<HTMLInputElement>(
     '#topbar-profile-name',
   )!;
-  const newBtn = root.querySelector<HTMLButtonElement>('#topbar-new-btn')!;
   const saveBtn = root.querySelector<HTMLButtonElement>('#topbar-save-btn')!;
   const deleteBtn = root.querySelector<HTMLButtonElement>(
     '#topbar-delete-btn',
   )!;
   const status = root.querySelector<HTMLSpanElement>('#topbar-status')!;
-  const currentName = root.querySelector<HTMLSpanElement>(
-    '#topbar-current-name',
-  )!;
 
   const slots = {
     url: root.querySelector<HTMLElement>('[data-slot="url"]')!,
@@ -143,7 +145,7 @@ export async function mountTopbar(
       status.dataset.status = kind === 'error' ? 'error' : 'info';
       window.setTimeout(() => {
         if (status.textContent === msg) {
-          status.textContent = activeId ? 'Idle' : 'Idle';
+          status.textContent = 'Idle';
           status.dataset.status = 'idle';
         }
       }, 2500);
@@ -151,18 +153,22 @@ export async function mountTopbar(
   }
 
   function renderOptions() {
-    select.innerHTML = '';
+    inlineSelect.innerHTML = '';
     const blank = document.createElement('option');
     blank.value = '';
-    blank.textContent = '— select profile —';
-    select.appendChild(blank);
+    blank.textContent =
+      profiles.length === 0
+        ? '— no saved connections —'
+        : '— select connection —';
+    inlineSelect.appendChild(blank);
     for (const p of profiles) {
       const opt = document.createElement('option');
       opt.value = p.id;
       opt.textContent = describeProfile(p);
-      select.appendChild(opt);
+      inlineSelect.appendChild(opt);
     }
-    select.value = activeId ?? '';
+    inlineSelect.value = activeId ?? '';
+    inlineEditBtn.disabled = !activeId;
   }
 
   async function refresh(): Promise<void> {
@@ -175,22 +181,27 @@ export async function mountTopbar(
     activeId = p.id;
     setLastProfileId(p.id);
     nameInput.value = p.name;
-    currentName.textContent = p.name;
     hooks.loadIntoForm({
       agentCardUrl: p.agentCardUrl,
       customHeaders: p.customHeaders,
     });
+    inlineEditBtn.disabled = false;
   }
 
   function clearActive(): void {
     activeId = null;
     setLastProfileId(null);
     nameInput.value = '';
-    currentName.textContent = 'New unsaved connection';
     hooks.loadIntoForm({agentCardUrl: '', customHeaders: []});
+    inlineEditBtn.disabled = true;
   }
 
-  function openModal(): void {
+  function openModal(mode: 'new' | 'edit'): void {
+    modalSubtitle.textContent =
+      mode === 'edit'
+        ? 'Edit the saved connection details.'
+        : 'Fill in the details and Save to add a new connection.';
+    deleteBtn.style.display = mode === 'edit' ? '' : 'none';
     modal.removeAttribute('hidden');
     nameInput.focus();
   }
@@ -199,8 +210,8 @@ export async function mountTopbar(
     modal.setAttribute('hidden', '');
   }
 
-  connectionBtn.addEventListener('click', openModal);
   closeBtn.addEventListener('click', closeModal);
+  cancelBtn.addEventListener('click', closeModal);
   modal.addEventListener('click', e => {
     if (e.target === modal) closeModal();
   });
@@ -211,8 +222,8 @@ export async function mountTopbar(
   });
   modalPanel.addEventListener('click', e => e.stopPropagation());
 
-  select.addEventListener('change', async () => {
-    const id = select.value;
+  inlineSelect.addEventListener('change', async () => {
+    const id = inlineSelect.value;
     if (!id) {
       clearActive();
       return;
@@ -224,11 +235,16 @@ export async function mountTopbar(
     }
   });
 
-  newBtn.addEventListener('click', () => {
+  inlineNewBtn.addEventListener('click', () => {
     clearActive();
     renderOptions();
     setStatus('Fill connection details');
-    openModal();
+    openModal('new');
+  });
+
+  inlineEditBtn.addEventListener('click', () => {
+    if (!activeId) return;
+    openModal('edit');
   });
 
   saveBtn.addEventListener('click', async () => {
@@ -254,10 +270,10 @@ export async function mountTopbar(
       isImplicit: false,
     });
     activeId = saved.id;
-    currentName.textContent = saved.name;
     setLastProfileId(saved.id);
     await refresh();
     setStatus(`Saved "${saved.name}"`);
+    closeModal();
   });
 
   deleteBtn.addEventListener('click', async () => {
@@ -274,6 +290,7 @@ export async function mountTopbar(
     clearActive();
     await refresh();
     setStatus(`Deleted "${name}"`);
+    closeModal();
   });
 
   await refresh();
