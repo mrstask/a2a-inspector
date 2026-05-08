@@ -45,3 +45,45 @@ You can also run one agent directly:
 .venv/bin/python examples/ollama_a2a_agent.py --agent assistant --port 5555
 .venv/bin/python examples/ollama_a2a_agent.py --agent structured --port 5556
 ```
+
+## Navigation Agent mock (Ollama-free)
+
+For exercising the inspector's `kind: data` / `ui_tool_call` rendering against
+realistic payloads, this folder also ships a hand-rolled mock that mirrors the
+production `tto-ida-navigation-agent`:
+
+```sh
+uv run python examples/navigation_mock_agent.py
+# listens on http://127.0.0.1:5558/
+```
+
+It uses no LLM and no Deloitte packages. Behaviour:
+
+- Multi-turn `ui_tool_call` flow with the real selector names
+  (`workareaSelector`, `workplanTaskSelector`, `documentSelector`,
+  `informationRequestSelector`, `dataPreparationTaskSelector`,
+  `analyticReportSelector`, `entitySelector`, ...).
+- Each selector call carries a `ui_tool__clarification` preamble plus
+  inherited context (`workAreaId`, `etpContainerId`, `client.id`,
+  `project.id`, ...) — the same shape as the real agent.
+- Once every required parameter is resolved, it emits the final
+  `navigation` `ui_tool_call` with `args.url` and marks the task
+  `completed`.
+
+Suggested prompts:
+
+| Prompt | Flow |
+|---|---|
+| `Go to the Reports page` | single-turn → `/reports` |
+| `Take me to IDA personalization settings` | single-turn → `/settings/personalization` |
+| `Open task` | `workareaSelector` → `workplanTaskSelector` → navigation |
+| `Take me to a document` | `workareaSelector` → `documentSelector` → navigation |
+| `Show data preparation` | `workareaSelector` → `dataPreparationTaskSelector` → navigation |
+| `Navigate me to an information request` | `workareaSelector` → `informationRequestSelector` → nav |
+| `Open entity` | `projectSelector` → `entitySelector` → navigation |
+
+Conversation state is keyed by `contextId`, so reply within the same chat
+dialog to advance the flow. The mock synthesises deterministic UUIDs for
+selected items, so URLs are stable per `(contextId, parameter)` pair.
+
+Override host/port via env vars: `NAV_MOCK_HOST`, `NAV_MOCK_PORT`.
