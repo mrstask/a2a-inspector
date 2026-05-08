@@ -21,6 +21,7 @@ from a2a.types import (
     AgentCapabilities,
     AgentCard,
     AgentSkill,
+    DataPart,
     Part,
     TaskState,
     TextPart,
@@ -60,6 +61,25 @@ AGENTS: dict[str, AgentConfig] = {
         examples=[
             "Summarize what an A2A inspector does.",
             "Give me three ideas for testing this UI.",
+        ],
+    ),
+    "navigation": AgentConfig(
+        key="navigation",
+        name="UI Navigation Demo",
+        description=(
+            "A local A2A test agent that emits kind=data / ui_tool_call parts "
+            "to exercise the inspector's Navigation Pill and Awaiting Input "
+            "Badge rendering."
+        ),
+        port=5557,
+        system_prompt="",
+        tags=["ui-tool-call", "navigation", "demo"],
+        examples=[
+            "go to data preparation",
+            "open work area dashboard",
+            "select task",
+            "select work area",
+            "start",
         ],
     ),
     "structured": AgentConfig(
@@ -207,12 +227,127 @@ def text_part(text: str) -> Part:
     return Part(root=TextPart(text=text))
 
 
+def ui_tool_call_part(
+    name: str, args: dict[str, object] | None = None
+) -> Part:
+    """Build a kind=data part wrapping a ui_tool_call payload.
+
+    The shape matches the IDA Navigation Agent contract that the inspector
+    renders as Navigation Pills / Awaiting Input Badges.
+    """
+    return Part(
+        root=DataPart(
+            data={
+                "type": "ui_tool_call",
+                "data": {"name": name, "args": dict(args or {})},
+            }
+        )
+    )
+
+
+NAV_ROUTES: dict[str, str] = {
+    "data preparation": "/work-areas/37787232-b8c3-4846-a3bc-30b3687c088e/data-preparation",
+    "work area": "/work-areas/37787232-b8c3-4846-a3bc-30b3687c088e",
+    "dashboard": "/dashboard",
+    "settings": "/settings",
+}
+
+
+def match_navigation(prompt: str) -> str | None:
+    lower = prompt.lower()
+    for keyword, url in NAV_ROUTES.items():
+        if keyword in lower:
+            return url
+    return None
+
+
+def match_selector(prompt: str) -> str | None:
+    lower = prompt.lower()
+    if "data preparation" in lower and "task" in lower:
+        return "dataPreparationTaskSelector"
+    if "work area" in lower or "workarea" in lower:
+        return "workareaSelector"
+    if "select" in lower or lower.strip() in {"", "start", "begin"}:
+        return "workareaSelector"
+    return None
+
+
+class NavigationDemoExecutor(AgentExecutor):
+    """Emits kind=data ui_tool_call parts to exercise the inspector UI."""
+
+    def __init__(self, config: AgentConfig) -> None:
+        self.config = config
+
+    async def execute(
+        self, context: RequestContext, event_queue: EventQueue
+    ) -> None:
+        task_id = context.task_id
+        context_id = context.context_id
+        if not task_id or not context_id:
+            raise RuntimeError("A2A request context did not include IDs")
+
+        updater = TaskUpdater(event_queue, task_id, context_id)
+        prompt = context.get_user_input().strip()
+
+        await updater.update_status(
+            TaskState.working,
+            message=updater.new_agent_message(
+                [text_part("Resolving UI tool call demo...")]
+            ),
+        )
+
+        url = match_navigation(prompt)
+        if url is not None:
+            nav_part = ui_tool_call_part("navigation", {"url": url})
+            text = text_part(f"Routing you to **{url}**.")
+            await updater.update_status(
+                TaskState.completed,
+                message=updater.new_agent_message([text, nav_part]),
+                metadata={"agent": self.config.key, "demo": "navigation"},
+            )
+            return
+
+        selector = match_selector(prompt) or "workareaSelector"
+        sel_part = ui_tool_call_part(selector)
+        prompt_text = text_part(
+            f"Pick an item from the **{selector}** widget to continue."
+        )
+        await updater.update_status(
+            TaskState.input_required,
+            message=updater.new_agent_message([prompt_text, sel_part]),
+            metadata={"agent": self.config.key, "demo": "selector"},
+            final=True,
+        )
+
+    async def cancel(
+        self, context: RequestContext, event_queue: EventQueue
+    ) -> None:
+        if not context.task_id or not context.context_id:
+            return
+        updater = TaskUpdater(event_queue, context.task_id, context.context_id)
+        await updater.cancel(
+            message=updater.new_agent_message(
+                [text_part("Canceled UI navigation demo request.")]
+            )
+        )
+
+
 def build_agent_card(config: AgentConfig, host: str, model: str) -> AgentCard:
     public_host = "127.0.0.1" if host in {"0.0.0.0", "::"} else host
     url = f"http://{public_host}:{config.port}/"
+    description = (
+        config.description
+        if config.key == "navigation"
+        else f"{config.description} Model: {model}."
+    )
+    output_modes = (
+        ["text/plain", "application/json"]
+        if config.key == "navigation"
+        else ["text/plain"]
+    )
     return AgentCard(
         name=config.name,
-        description=f"{config.description} Model: {model}.",
+        description=description,
         url=url,
         version="0.1.0",
         protocol_version="0.3.0",
@@ -222,7 +357,7 @@ def build_agent_card(config: AgentConfig, host: str, model: str) -> AgentCard:
             state_transition_history=True,
         ),
         default_input_modes=["text/plain"],
-        default_output_modes=["text/plain"],
+        default_output_modes=output_modes,
         skills=[
             AgentSkill(
                 id=f"{config.key}-chat",
@@ -242,13 +377,17 @@ def build_app(
     ollama_url: str,
     timeout_seconds: float,
 ):
-    handler = DefaultRequestHandler(
-        agent_executor=OllamaA2AExecutor(
+    if config.key == "navigation":
+        executor: AgentExecutor = NavigationDemoExecutor(config=config)
+    else:
+        executor = OllamaA2AExecutor(
             config=config,
             model=model,
             ollama_url=ollama_url,
             timeout_seconds=timeout_seconds,
-        ),
+        )
+    handler = DefaultRequestHandler(
+        agent_executor=executor,
         task_store=InMemoryTaskStore(),
     )
     server = A2AStarletteApplication(

@@ -31,6 +31,16 @@ interface FileWithUri extends FileBase {
 
 type FileContent = FileWithBytes | FileWithUri;
 
+type AnyPart =
+  | {kind?: string; text?: string}
+  | {kind?: string; file?: FileContent}
+  | {kind?: string; data?: unknown};
+
+interface UiToolCallPayload {
+  name?: string;
+  args?: Record<string, unknown>;
+}
+
 interface AgentResponseEvent {
   kind: 'task' | 'status-update' | 'artifact-update' | 'message';
   id: string;
@@ -38,23 +48,19 @@ interface AgentResponseEvent {
   error?: string;
   status?: {
     state: string;
-    message?: {parts?: {text?: string}[]};
+    message?: {parts?: AnyPart[]};
   };
   artifact?: {
-    parts?: ({file?: FileContent} | {text?: string} | {data?: object})[];
+    parts?: AnyPart[];
   };
   artifacts?: Array<{
     artifactId?: string;
     name?: string;
     description?: string;
     metadata?: object;
-    parts?: (
-      | {kind?: string; file?: FileContent}
-      | {kind?: string; text?: string}
-      | {kind?: string; data?: object}
-    )[];
+    parts?: AnyPart[];
   }>;
-  parts?: {text?: string}[];
+  parts?: AnyPart[];
   validation_errors: string[];
 }
 
@@ -1392,6 +1398,51 @@ document.addEventListener('DOMContentLoaded', () => {
     return renderMultimediaContent(dataUri, mimeType);
   };
 
+  const camelToLabel = (name: string): string =>
+    name
+      .replace(/([A-Z])/g, ' $1')
+      .replace(/[_-]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .replace(/^./, s => s.toUpperCase())
+      .trim();
+
+  const renderUiToolCall = (tool: UiToolCallPayload): string => {
+    const rawName = typeof tool.name === 'string' ? tool.name : '';
+    const safeName = DOMPurify.sanitize(rawName);
+
+    if (rawName === 'navigation') {
+      const url =
+        tool.args && typeof tool.args.url === 'string' ? tool.args.url : '';
+      const safeUrl = DOMPurify.sanitize(url);
+      const ariaLabel = DOMPurify.sanitize(`Navigation: ${url}`);
+      const linkHtml = url
+        ? `<a class="part-tool-call__value" href="${safeUrl}" target="_blank" rel="noopener noreferrer">${safeUrl}</a>`
+        : `<span class="part-tool-call__value">(no URL)</span>`;
+      return (
+        `<div class="part-tool-call part-tool-call--navigation" role="status" aria-label="${ariaLabel}" tabindex="0">` +
+        `<span class="part-tool-call__icon" aria-hidden="true">→</span>` +
+        `<span class="part-tool-call__body">` +
+        `<span class="part-tool-call__label">Navigate to</span>` +
+        linkHtml +
+        `</span>` +
+        `</div>`
+      );
+    }
+
+    const humanName = rawName ? camelToLabel(rawName) : 'Unknown tool';
+    const safeHuman = DOMPurify.sanitize(humanName);
+    const ariaLabel = DOMPurify.sanitize(`Awaiting input: ${humanName}`);
+    return (
+      `<div class="part-tool-call part-tool-call--selector" role="status" aria-label="${ariaLabel}" title="${safeName}" tabindex="0">` +
+      `<span class="part-tool-call__icon" aria-hidden="true">⏳</span>` +
+      `<span class="part-tool-call__body">` +
+      `<span class="part-tool-call__label">Awaiting input</span>` +
+      `<span class="part-tool-call__value">${safeHuman}</span>` +
+      `</span>` +
+      `</div>`
+    );
+  };
+
   const processPart = (p: any): string | null => {
     if (p.text) {
       return DOMPurify.sanitize(marked.parse(p.text) as string);
@@ -1403,9 +1454,20 @@ document.addEventListener('DOMContentLoaded', () => {
         return renderMultimediaContent(uri, mimeType);
       }
     } else if (p.data) {
-      const dataObj = p.data as any;
+      const dataObj = p.data as {
+        type?: string;
+        data?: UiToolCallPayload;
+        mimeType?: string;
+      } & Record<string, unknown>;
+      if (
+        dataObj.type === 'ui_tool_call' &&
+        dataObj.data &&
+        typeof dataObj.data === 'object'
+      ) {
+        return renderUiToolCall(dataObj.data);
+      }
       if (dataObj.mimeType && typeof dataObj.data === 'string') {
-        return renderBase64Data(dataObj.data, dataObj.mimeType);
+        return renderBase64Data(dataObj.data as string, dataObj.mimeType);
       } else {
         return `<pre><code>${DOMPurify.sanitize(JSON.stringify(p.data, null, 2))}</code></pre>`;
       }
@@ -1505,9 +1567,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const hasArtifacts = event.artifacts && event.artifacts.length > 0;
 
         if (statusContent.length > 0) {
+          const inputRequiredChip =
+            event.status?.state === 'input-required'
+              ? '<span class="kind-chip kind-chip-input-required">input required</span> '
+              : '';
           appendMessage(
             'agent',
-            statusContent.join(''),
+            inputRequiredChip + statusContent.join(''),
             displayMessageId,
             true,
             validationErrors,
@@ -1557,12 +1623,15 @@ document.addEventListener('DOMContentLoaded', () => {
         break;
       }
       case 'status-update': {
-        const statusText = event.status?.message?.parts?.[0]?.text;
-        if (statusText) {
-          const renderedContent = DOMPurify.sanitize(
-            marked.parse(statusText) as string,
-          );
-          const messageHtml = `<span class="kind-chip kind-chip-status-update">${event.kind}</span> Server responded with: ${renderedContent}`;
+        const statusContent = collectPartsContent(
+          event.status?.message?.parts,
+        );
+        if (statusContent.length > 0) {
+          const inputRequiredChip =
+            event.status?.state === 'input-required'
+              ? ' <span class="kind-chip kind-chip-input-required">input required</span>'
+              : '';
+          const messageHtml = `<span class="kind-chip kind-chip-status-update">${event.kind}</span>${inputRequiredChip} ${statusContent.join('')}`;
           appendMessage(
             'agent progress',
             messageHtml,
@@ -1594,14 +1663,11 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         break;
       case 'message': {
-        const textPart = event.parts?.find(p => p.text);
-        if (textPart && textPart.text) {
-          const renderedContent = DOMPurify.sanitize(
-            marked.parse(textPart.text) as string,
-          );
+        const messageContent = collectPartsContent(event.parts);
+        if (messageContent.length > 0) {
           appendMessage(
             'agent',
-            renderedContent,
+            messageContent.join(''),
             displayMessageId,
             true,
             validationErrors,

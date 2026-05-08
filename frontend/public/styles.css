@@ -716,6 +716,95 @@ body.dark-mode .attachment-size {
     color: #991b1b;
 }
 
+.kind-chip-input-required {
+    background-color: #fef3c7;
+    /* amber */
+    border-color: #fbbf24;
+    color: #92400e;
+}
+
+.part-tool-call {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    margin: 4px 0;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    max-width: 100%;
+    box-sizing: border-box;
+    line-height: 1.35;
+    outline: none;
+}
+
+.part-tool-call:focus-visible {
+    box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.45);
+}
+
+.part-tool-call__icon {
+    flex: 0 0 auto;
+    font-size: 1.05em;
+    line-height: 1;
+}
+
+.part-tool-call__body {
+    display: inline-flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.part-tool-call__label {
+    font-size: 0.78em;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    opacity: 0.75;
+}
+
+.part-tool-call__value {
+    font-family: var(--mono-font, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+    font-size: 0.92em;
+    word-break: break-all;
+    overflow-wrap: anywhere;
+    color: inherit;
+}
+
+a.part-tool-call__value {
+    text-decoration: underline;
+    text-decoration-color: currentColor;
+    text-underline-offset: 2px;
+}
+
+.part-tool-call--navigation {
+    background: #e0f2fe;
+    border-color: #7dd3fc;
+    color: #0c4a6e;
+}
+
+.part-tool-call--selector {
+    background: #fef3c7;
+    border-color: #fbbf24;
+    color: #92400e;
+}
+
+body.dark-mode .part-tool-call--navigation {
+    background: rgba(14, 165, 233, 0.16);
+    border-color: rgba(14, 165, 233, 0.42);
+    color: #7dd3fc;
+}
+
+body.dark-mode .part-tool-call--selector {
+    background: rgba(245, 158, 11, 0.18);
+    border-color: rgba(245, 158, 11, 0.45);
+    color: #fcd34d;
+}
+
+body.dark-mode .kind-chip-input-required {
+    background: rgba(245, 158, 11, 0.18);
+    border-color: rgba(245, 158, 11, 0.45);
+    color: #fcd34d;
+}
+
 .message.user {
     background-color: #0084ff;
     color: white;
