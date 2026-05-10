@@ -7,7 +7,6 @@ import {setLastProfileId} from './storage/prefs';
 import {mountTopbar, type MountedTopbar} from './ui/topbar';
 import {showReauthDialog} from './ui/reauth-dialog';
 import {mountSidebar, type MountedSidebar} from './ui/sidebar';
-import {mountTabs} from './ui/tabs';
 import {
   appendDebugEvent as dbAppendDebug,
   appendMessage as dbAppendMessage,
@@ -111,10 +110,8 @@ document.addEventListener('DOMContentLoaded', () => {
     document.body.classList.add('layout-v2');
     const topbarRoot = document.getElementById('topbar-root');
     if (topbarRoot) topbarRoot.removeAttribute('hidden');
-    const tabBar = document.getElementById('tab-bar');
-    if (tabBar) tabBar.removeAttribute('hidden');
-    const responseRoot = document.getElementById('response-panel');
-    if (responseRoot) responseRoot.removeAttribute('hidden');
+    const rightRail = document.getElementById('right-rail');
+    if (rightRail) rightRail.removeAttribute('hidden');
   }
 
   let topbar: MountedTopbar | null = null;
@@ -216,13 +213,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const newSessionBtn = document.getElementById(
     'new-session-btn',
   ) as HTMLButtonElement;
+  const copyDialogBtn = document.getElementById(
+    'copy-dialog-btn',
+  ) as HTMLButtonElement | null;
   const fileInput = document.getElementById('file-input') as HTMLInputElement;
   const attachBtn = document.getElementById('attach-btn') as HTMLButtonElement;
   const attachmentsPreview = document.getElementById(
     'attachments-preview',
-  ) as HTMLElement;
-  const responsePanel = document.getElementById(
-    'response-panel',
   ) as HTMLElement;
   const requestBodyJson = document.getElementById(
     'request-body-json',
@@ -381,17 +378,19 @@ document.addEventListener('DOMContentLoaded', () => {
     document.body.style.pointerEvents = '';
   });
 
-  collapsibleHeader.addEventListener('click', () => {
-    collapsibleHeader.classList.toggle('collapsed');
-    collapsibleContent.classList.toggle('collapsed');
-    collapsibleContent.style.overflow = 'hidden';
-  });
+  if (collapsibleHeader && collapsibleContent) {
+    collapsibleHeader.addEventListener('click', () => {
+      collapsibleHeader.classList.toggle('collapsed');
+      collapsibleContent.classList.toggle('collapsed');
+      collapsibleContent.style.overflow = 'hidden';
+    });
 
-  collapsibleContent.addEventListener('transitionend', () => {
-    if (!collapsibleContent.classList.contains('collapsed')) {
-      collapsibleContent.style.overflow = 'auto';
-    }
-  });
+    collapsibleContent.addEventListener('transitionend', () => {
+      if (!collapsibleContent.classList.contains('collapsed')) {
+        collapsibleContent.style.overflow = 'auto';
+      }
+    });
+  }
 
   function setupToggle(
     toggleElement: HTMLElement,
@@ -536,8 +535,10 @@ document.addEventListener('DOMContentLoaded', () => {
   if (layoutV2) {
     sessionDetailsContent?.classList.add('expanded');
     messageMetadataContent?.classList.add('expanded');
-    sessionDetailsToggle.querySelector('.toggle-icon')!.textContent = '▼';
-    messageMetadataToggle.querySelector('.toggle-icon')!.textContent = '▼';
+    const sessIcon = sessionDetailsToggle?.querySelector('.toggle-icon');
+    if (sessIcon) sessIcon.textContent = '▼';
+    const metaIcon = messageMetadataToggle?.querySelector('.toggle-icon');
+    if (metaIcon) metaIcon.textContent = '▼';
   }
 
   addHeaderBtn.addEventListener('click', () => addHeaderField());
@@ -564,24 +565,6 @@ document.addEventListener('DOMContentLoaded', () => {
     '.remove-metadata-btn',
     '.metadata-item',
   );
-
-  // Phase 4: mount tab bar (Chat / Agent Card / Debug) when layout-v2 is active.
-  if (layoutV2) {
-    const tabBar = document.getElementById('tab-bar');
-    if (tabBar) {
-      // Ensure debug console is not display:none when used as a tab.
-      const dc = document.getElementById('debug-console');
-      if (dc) dc.classList.remove('hidden');
-      mountTabs(tabBar, {
-        storageKey: 'a2a-inspector:requestTab',
-        tabs: [
-          {id: 'chat', label: 'Chat'},
-          {id: 'rawJson', label: 'Body'},
-          {id: 'tools', label: 'Tools'},
-        ],
-      });
-    }
-  }
 
   // Phase 2: mount the topbar profile selector when layout-v2 is active.
   if (layoutV2 && idbAvailable()) {
@@ -621,6 +604,16 @@ document.addEventListener('DOMContentLoaded', () => {
           if (connectBtnEl) t.slots.connect.appendChild(connectBtnEl);
           if (themeWrap) t.slots.theme.appendChild(themeWrap);
           if (httpHeaders) t.slots.headersPanel.appendChild(httpHeaders);
+
+          // Relocate the connection cluster (saved-profile select, Connect,
+          // + New, Edit) from the topbar into the right-rail Connection
+          // section. Live event handlers stay attached because we move the
+          // same nodes.
+          const connSlot = document.getElementById('rail-connection-slot');
+          const connGroup = topbarRoot.querySelector('.topbar-conn-group');
+          if (connSlot && connGroup) {
+            connSlot.appendChild(connGroup);
+          }
 
           const sidebarRoot = document.getElementById('sidebar-root');
           if (sidebarRoot) {
@@ -942,6 +935,67 @@ document.addEventListener('DOMContentLoaded', () => {
   newSessionBtn.addEventListener('click', () => {
     resetSession();
   });
+
+  function buildDialogText(): string {
+    const lines: string[] = [];
+    const messages = chatMessages.querySelectorAll<HTMLElement>('.message');
+    for (const el of Array.from(messages)) {
+      if (el.classList.contains('agent-loading')) continue;
+      const cls = el.className.replace(/^message\s*/, '').split(/\s+/);
+      const role = cls[0] || 'message';
+      const contentEl = el.querySelector('.message-content') as HTMLElement | null;
+      const text = (contentEl?.innerText ?? el.innerText ?? '').trim();
+      if (!text) continue;
+      lines.push(`[${role}] ${text}`);
+    }
+    return lines.join('\n\n');
+  }
+
+  async function copyTextToClipboard(text: string): Promise<boolean> {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch {
+      /* fall through to legacy path */
+    }
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+
+  if (copyDialogBtn) {
+    copyDialogBtn.addEventListener('click', async () => {
+      const text = buildDialogText();
+      if (!text) {
+        const original = copyDialogBtn.textContent ?? 'Copy';
+        copyDialogBtn.textContent = 'Empty';
+        window.setTimeout(() => {
+          copyDialogBtn.textContent = original;
+        }, 1200);
+        return;
+      }
+      const ok = await copyTextToClipboard(text);
+      const original = 'Copy';
+      copyDialogBtn.textContent = ok ? 'Copied' : 'Failed';
+      copyDialogBtn.classList.toggle('is-copied', ok);
+      window.setTimeout(() => {
+        copyDialogBtn.textContent = original;
+        copyDialogBtn.classList.remove('is-copied');
+      }, 1200);
+    });
+  }
 
   modalCloseBtn.addEventListener('click', () =>
     jsonModal.classList.add('hidden'),

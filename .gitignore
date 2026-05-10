@@ -341,3 +341,9 @@ poetry.toml
 pyrightconfig.json
 
 frontend/public/script.js
+
+# Local tooling artifacts
+.claude/
+graphify-out/
+.playwright-mcp/
+a2a-*.png

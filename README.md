@@ -16,12 +16,20 @@ The application is built with a FastAPI backend and a TypeScript frontend.
 
 ## Interface Overview
 
-The workspace is organized into three primary areas:
+The workspace is a three-column layout — sidebar, chat, and an accordion right rail — with no full-width header bar. The visual language follows the LibreChat aesthetic: Geist Sans / Geist Mono typography, neutral grayscale palette, 8px radius, and slim hairline borders.
 
-- **Top bar:** Shows the active connection, connection status, saved connection manager, and theme toggle.
-- **Left sidebar:** Lists saved dialogs for the active profile and lets you start a new dialog.
-- **Main workspace:** Provides the chat, request body, and tools tabs.
-- **Response panel:** Shows the latest response metadata, pretty/raw payloads, timeline, and logs.
+- **Left sidebar:** Lists saved dialogs for the active profile and exposes a `+ New` action to start a fresh dialog.
+- **Center column:** A slim 40px strip at the top holds the brand mark, connection status pill, and theme toggle. Below it is the chat panel — user messages render as right-aligned blue bubbles, agent messages as plain left-aligned text, with a single LibreChat-style pill input (attach on the left, circular send on the right).
+- **Right rail (accordion):** Collapsible `<details>` sections for everything else, in order:
+  - **Connection** — saved-profile selector, Connect, `+ New`, `Edit`.
+  - **Response** — status pill, response time / size, and Pretty / Raw / Timeline / Logs sub-tabs.
+  - **Request body** — editable JSON request preview.
+  - **Tools** — toggle which tools the agent gets.
+  - **Session** — transport, modalities, and the active context ID.
+  - **Metadata** — custom message metadata key/value pairs.
+  - **Agent card** — the validated agent card JSON.
+
+The Connection section uses a stacked grid layout — saved-profile select, primary Connect button, then `+ New` / `Edit` side by side — so it stays usable in the narrow rail.
 
 ![A2A Inspector workspace](docs/images/inspector-workspace.png)
 
