@@ -937,19 +937,89 @@ document.addEventListener('DOMContentLoaded', () => {
     resetSession();
   });
 
+  function safeJsonStringify(value: unknown): string {
+    try {
+      return JSON.stringify(value, null, 2);
+    } catch {
+      try {
+        return String(value);
+      } catch {
+        return '<unserializable>';
+      }
+    }
+  }
+
+  function readMessageDetails(el: HTMLElement): Array<[string, string]> {
+    const rows: Array<[string, string]> = [];
+    const rowEls = el.querySelectorAll<HTMLElement>('.message-details-row');
+    for (const r of Array.from(rowEls)) {
+      const label = r
+        .querySelector<HTMLElement>('.message-details-label')
+        ?.textContent?.trim();
+      const value = r
+        .querySelector<HTMLElement>('.message-details-value')
+        ?.textContent?.trim();
+      if (label && value) rows.push([label, value]);
+    }
+    return rows;
+  }
+
   function buildDialogText(): string {
-    const lines: string[] = [];
+    const sections: string[] = [];
+
+    const header: string[] = ['# A2A Inspector dialog'];
+    const url = agentCardUrlInput.value.trim();
+    if (url) header.push(`Agent URL: ${url}`);
+    if (contextId) header.push(`Context ID: ${contextId}`);
+    const exportedAt = new Date().toISOString();
+    header.push(`Exported: ${exportedAt}`);
+    sections.push(header.join('\n'));
+
     const messages = chatMessages.querySelectorAll<HTMLElement>('.message');
+    let hasAny = false;
     for (const el of Array.from(messages)) {
       if (el.classList.contains('agent-loading')) continue;
-      const cls = el.className.replace(/^message\s*/, '').split(/\s+/);
-      const role = cls[0] || 'message';
-      const contentEl = el.querySelector('.message-content') as HTMLElement | null;
+      const role = el.dataset.role || el.className.replace(/^message\s*/, '').split(/\s+/)[0] || 'message';
+      const contentEl = el.querySelector<HTMLElement>('.message-content');
       const text = (contentEl?.innerText ?? el.innerText ?? '').trim();
-      if (!text) continue;
-      lines.push(`[${role}] ${text}`);
+
+      const parts: string[] = [];
+      parts.push(`## [${role}]`);
+      if (text) parts.push(text);
+
+      const detailRows = readMessageDetails(el);
+      if (detailRows.length > 0) {
+        parts.push('Details:');
+        for (const [label, value] of detailRows) {
+          const indented = value
+            .split('\n')
+            .map((line, idx) => (idx === 0 ? line : `    ${line}`))
+            .join('\n');
+          parts.push(`- ${label}: ${indented}`);
+        }
+      }
+
+      const messageId = el.dataset.messageId;
+      if (messageId) {
+        const userRequest =
+          role.startsWith('user') ? rawLogStore[messageId]?.request : undefined;
+        const agentEvent =
+          !role.startsWith('user') ? messageJsonStore[messageId] : undefined;
+        const payload = userRequest ?? agentEvent;
+        if (payload !== undefined && payload !== null) {
+          parts.push('```json');
+          parts.push(safeJsonStringify(payload));
+          parts.push('```');
+        }
+      }
+
+      if (text || detailRows.length > 0 || (messageId && (rawLogStore[messageId] || messageJsonStore[messageId]))) {
+        sections.push(parts.join('\n'));
+        hasAny = true;
+      }
     }
-    return lines.join('\n\n');
+
+    return hasAny ? sections.join('\n\n') : '';
   }
 
   async function copyTextToClipboard(text: string): Promise<boolean> {
@@ -1898,6 +1968,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const messageElement = document.createElement('div');
     messageElement.className = `message ${sender.replace(' ', '-')}`;
+    messageElement.dataset.messageId = messageId;
+    messageElement.dataset.role = sender;
 
     // Add attachments section if there are attachments
     if (attachmentsToShow.length > 0) {
