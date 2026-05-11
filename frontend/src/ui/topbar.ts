@@ -14,6 +14,7 @@ import {
 export interface TopbarSnapshot {
   agentCardUrl: string;
   customHeaders: CustomHeader[];
+  routeThroughAgentUrl: boolean;
 }
 
 export interface TopbarHooks {
@@ -25,6 +26,7 @@ export interface TopbarHooks {
 
 export interface MountedTopbar {
   getActiveProfileId: () => string | null;
+  getRouteThroughAgentUrl: () => boolean;
   refresh: () => Promise<void>;
   /** Slot elements consumers can append relocated DOM into. */
   slots: {
@@ -76,6 +78,13 @@ const TEMPLATE = `
           <div class="topbar-url-slot" data-slot="url"></div>
           <small class="connection-field-hint">Base URL of the agent, or a full agent card URL.</small>
         </label>
+        <label class="connection-checkbox-field" for="topbar-route-through-agent-url">
+          <input type="checkbox" id="topbar-route-through-agent-url" />
+          <span class="connection-checkbox-text">
+            <span class="connection-checkbox-title">Route requests through the Agent URL</span>
+            <small class="connection-field-hint">Rewrites the card's host with the URL above. Useful when the agent advertises an internal address (e.g. behind an ingress).</small>
+          </span>
+        </label>
         <div class="connection-auth-slot" data-slot="headersPanel"></div>
       </div>
       <div class="connection-modal-actions">
@@ -123,6 +132,9 @@ export async function mountTopbar(
   )!;
   const nameInput = root.querySelector<HTMLInputElement>(
     '#topbar-profile-name',
+  )!;
+  const routeThroughCheckbox = root.querySelector<HTMLInputElement>(
+    '#topbar-route-through-agent-url',
   )!;
   const saveBtn = root.querySelector<HTMLButtonElement>('#topbar-save-btn')!;
   const deleteBtn = root.querySelector<HTMLButtonElement>(
@@ -182,9 +194,11 @@ export async function mountTopbar(
     activeId = p.id;
     setLastProfileId(p.id);
     nameInput.value = p.name;
+    routeThroughCheckbox.checked = Boolean(p.routeThroughAgentUrl);
     hooks.loadIntoForm({
       agentCardUrl: p.agentCardUrl,
       customHeaders: p.customHeaders,
+      routeThroughAgentUrl: Boolean(p.routeThroughAgentUrl),
     });
     inlineEditBtn.disabled = false;
   }
@@ -193,7 +207,12 @@ export async function mountTopbar(
     activeId = null;
     setLastProfileId(null);
     nameInput.value = '';
-    hooks.loadIntoForm({agentCardUrl: '', customHeaders: []});
+    routeThroughCheckbox.checked = false;
+    hooks.loadIntoForm({
+      agentCardUrl: '',
+      customHeaders: [],
+      routeThroughAgentUrl: false,
+    });
     inlineEditBtn.disabled = true;
   }
 
@@ -250,6 +269,7 @@ export async function mountTopbar(
 
   saveBtn.addEventListener('click', async () => {
     const snapshot = hooks.readFromForm();
+    const routeThrough = routeThroughCheckbox.checked;
     const name = nameInput.value.trim() || snapshot.agentCardUrl;
     if (!snapshot.agentCardUrl) {
       setStatus('URL required to save profile', 'error');
@@ -268,6 +288,7 @@ export async function mountTopbar(
       authConfig: existing?.authConfig ?? {},
       customHeaders: snapshot.customHeaders,
       defaultMetadata: existing?.defaultMetadata ?? [],
+      routeThroughAgentUrl: routeThrough,
       isImplicit: false,
     });
     activeId = saved.id;
@@ -307,6 +328,7 @@ export async function mountTopbar(
 
   return {
     getActiveProfileId: () => activeId,
+    getRouteThroughAgentUrl: () => routeThroughCheckbox.checked,
     refresh,
     slots,
     closeConnectionPopup: closeModal,

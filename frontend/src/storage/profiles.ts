@@ -45,6 +45,7 @@ export async function upsertProfile(
     authConfig: input.authConfig,
     customHeaders: input.customHeaders,
     defaultMetadata: input.defaultMetadata,
+    routeThroughAgentUrl: input.routeThroughAgentUrl,
     isImplicit: input.isImplicit,
     lastConnectedAt: input.lastConnectedAt,
     lastDialogId: input.lastDialogId,
@@ -71,6 +72,7 @@ export async function findByUrl(
 export async function upsertImplicit(
   agentCardUrl: string,
   customHeaders: Record<string, string> = {},
+  routeThroughAgentUrl: boolean = false,
 ): Promise<AgentProfile> {
   const existing = await findByUrl(agentCardUrl);
   const headers = Object.entries(customHeaders).map(([name, value]) => ({
@@ -81,6 +83,7 @@ export async function upsertImplicit(
   if (existing) {
     return upsertProfile({
       ...existing,
+      routeThroughAgentUrl,
       lastConnectedAt: now,
     });
   }
@@ -91,6 +94,7 @@ export async function upsertImplicit(
     authConfig: {},
     customHeaders: headers,
     defaultMetadata: [],
+    routeThroughAgentUrl,
     isImplicit: true,
     lastConnectedAt: now,
   });

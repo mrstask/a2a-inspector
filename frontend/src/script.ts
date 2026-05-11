@@ -588,6 +588,7 @@ document.addEventListener('DOMContentLoaded', () => {
               '.header-value',
             ),
           ).map(([name, value]) => ({name, value})),
+          routeThroughAgentUrl: topbar?.getRouteThroughAgentUrl() ?? false,
         }),
       })
         .then(t => {
@@ -1155,10 +1156,16 @@ document.addEventListener('DOMContentLoaded', () => {
     pendingBearerToken = bearerInUse;
 
     try {
+      const routeThroughAgentUrl =
+        topbar?.getRouteThroughAgentUrl() ?? false;
       const response = await fetch('/agent-card', {
         method: 'POST',
         headers: requestHeaders,
-        body: JSON.stringify({url: agentCardUrl, sid: socket.id}),
+        body: JSON.stringify({
+          url: agentCardUrl,
+          sid: socket.id,
+          routeThroughAgentUrl,
+        }),
       });
       const data = await response.json();
       if (!response.ok) {
@@ -1204,6 +1211,7 @@ document.addEventListener('DOMContentLoaded', () => {
       socket.emit('initialize_client', {
         url: agentCardUrl,
         customHeaders: customHeaders,
+        routeThroughAgentUrl,
       });
 
       // Persist profile state on successful connect.
@@ -1219,11 +1227,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     ...p,
                     agentCardUrl,
                     customHeaders: headerArr,
+                    routeThroughAgentUrl,
                     lastConnectedAt: new Date().toISOString(),
                   })
-                : upsertImplicit(agentCardUrl, customHeaders),
+                : upsertImplicit(
+                    agentCardUrl,
+                    customHeaders,
+                    routeThroughAgentUrl,
+                  ),
             )
-          : upsertImplicit(agentCardUrl, customHeaders);
+          : upsertImplicit(
+              agentCardUrl,
+              customHeaders,
+              routeThroughAgentUrl,
+            );
         persistPromise
           .then(profile => {
             setLastProfileId(profile.id);

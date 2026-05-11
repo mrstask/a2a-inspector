@@ -23,6 +23,7 @@ export interface AgentProfile {
   };
   customHeaders: CustomHeader[];
   defaultMetadata: DefaultMetadataEntry[];
+  routeThroughAgentUrl?: boolean;
   isImplicit?: boolean;
   createdAt: string;
   updatedAt: string;

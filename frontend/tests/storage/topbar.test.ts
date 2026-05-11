@@ -28,7 +28,7 @@ describe('ui/topbar', () => {
     const root = makeRoot();
     const hooks = {
       loadIntoForm: vi.fn(),
-      readFromForm: vi.fn(() => ({agentCardUrl: '', customHeaders: []})),
+      readFromForm: vi.fn(() => ({agentCardUrl: '', customHeaders: [], routeThroughAgentUrl: false})),
     };
     await mountTopbar(root, hooks);
     const select = root.querySelector('select')!;
@@ -48,7 +48,7 @@ describe('ui/topbar', () => {
     const root = makeRoot();
     await mountTopbar(root, {
       loadIntoForm: vi.fn(),
-      readFromForm: vi.fn(() => ({agentCardUrl: '', customHeaders: []})),
+      readFromForm: vi.fn(() => ({agentCardUrl: '', customHeaders: [], routeThroughAgentUrl: false})),
     });
     const select = root.querySelector('select')!;
     expect(select.querySelectorAll('option')).toHaveLength(2);
@@ -60,6 +60,7 @@ describe('ui/topbar', () => {
     const readFromForm = vi.fn(() => ({
       agentCardUrl: 'http://saveme:5555',
       customHeaders: [{name: 'X', value: 'Y'}],
+      routeThroughAgentUrl: false,
     }));
     await mountTopbar(root, {
       loadIntoForm: vi.fn(),
@@ -97,7 +98,7 @@ describe('ui/topbar', () => {
     const root = makeRoot();
     await mountTopbar(root, {
       loadIntoForm,
-      readFromForm: vi.fn(() => ({agentCardUrl: '', customHeaders: []})),
+      readFromForm: vi.fn(() => ({agentCardUrl: '', customHeaders: [], routeThroughAgentUrl: false})),
     });
     const select = root.querySelector<HTMLSelectElement>(
       '#topbar-inline-select',
@@ -109,6 +110,7 @@ describe('ui/topbar', () => {
     expect(loadIntoForm).toHaveBeenCalledWith({
       agentCardUrl: 'http://load',
       customHeaders: [{name: 'A', value: 'B'}],
+      routeThroughAgentUrl: false,
     });
   });
 
@@ -126,12 +128,13 @@ describe('ui/topbar', () => {
     const root = makeRoot();
     const t = await mountTopbar(root, {
       loadIntoForm,
-      readFromForm: vi.fn(() => ({agentCardUrl: '', customHeaders: []})),
+      readFromForm: vi.fn(() => ({agentCardUrl: '', customHeaders: [], routeThroughAgentUrl: false})),
     });
     expect(t.getActiveProfileId()).toBe(p.id);
     expect(loadIntoForm).toHaveBeenCalledWith({
       agentCardUrl: 'http://sticky',
       customHeaders: [],
+      routeThroughAgentUrl: false,
     });
   });
 });

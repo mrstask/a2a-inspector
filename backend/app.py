@@ -121,6 +121,64 @@ async def _process_a2a_response(
     await sio.emit('agent_response', response_data, to=sid)
 
 
+_WELL_KNOWN_SUFFIXES = (
+    '/.well-known/agent-card.json',
+    '/.well-known/agent.json',
+)
+
+
+def _agent_external_root(typed_url: str) -> tuple[str, str]:
+    """Derive the external scheme+host and base path from a typed URL.
+
+    Strips any trailing ``.well-known`` card filename or other ``.json`` leaf
+    so the returned path describes the agent's mount point — what should sit
+    in front of the card's own RPC path when requests are routed back through
+    the same origin the card was fetched from.
+    """
+    parsed = urlparse(typed_url)
+    origin = f'{parsed.scheme}://{parsed.netloc}'
+    path = parsed.path or ''
+    for suffix in _WELL_KNOWN_SUFFIXES:
+        if path.endswith(suffix):
+            path = path[: -len(suffix)]
+            break
+    else:
+        if path.endswith('.json'):
+            path = path.rsplit('/', 1)[0]
+    return origin, path.rstrip('/')
+
+
+def rewrite_card_urls(card: Any, typed_url: str) -> Any:
+    """Rewrite the card's URLs to flow through the typed origin.
+
+    Replaces the scheme+host of ``card.url`` (and every
+    ``card.additional_interfaces[*].url``) with the origin the card was
+    fetched from, prefixing the existing path with the typed sub-path so an
+    agent mounted at ``/api-foo`` keeps that prefix. Useful when the card
+    advertises an internal hostname that is unreachable from the client.
+    """
+    origin, root = _agent_external_root(typed_url)
+
+    def _rewrite(url: str) -> str:
+        if not url:
+            return url
+        parsed = urlparse(url)
+        original_path = parsed.path or ''
+        if not original_path.startswith('/'):
+            original_path = '/' + original_path
+        query = f'?{parsed.query}' if parsed.query else ''
+        fragment = f'#{parsed.fragment}' if parsed.fragment else ''
+        return f'{origin}{root}{original_path}{query}{fragment}'
+
+    if getattr(card, 'url', None):
+        card.url = _rewrite(card.url)
+    interfaces = getattr(card, 'additional_interfaces', None) or []
+    for iface in interfaces:
+        if getattr(iface, 'url', None):
+            iface.url = _rewrite(iface.url)
+    return card
+
+
 def get_card_resolver(
     client: httpx.AsyncClient, agent_card_url: str
 ) -> A2ACardResolver:
@@ -164,6 +222,9 @@ async def get_agent_card(request: Request) -> JSONResponse:
         request_data = await request.json()
         agent_url = request_data.get('url')
         sid = request_data.get('sid')
+        route_through_agent_url = bool(
+            request_data.get('routeThroughAgentUrl', False)
+        )
 
         if not agent_url or not sid:
             return JSONResponse(
@@ -203,6 +264,8 @@ async def get_agent_card(request: Request) -> JSONResponse:
             card_resolver = get_card_resolver(client, agent_url)
             card = await card_resolver.get_agent_card()
 
+        if route_through_agent_url:
+            card = rewrite_card_urls(card, agent_url)
         card_data = card.model_dump(exclude_none=True)
         validation_errors = validators.validate_agent_card(card_data)
         response_data = {
@@ -259,6 +322,7 @@ async def handle_initialize_client(sid: str, data: dict[str, Any]) -> None:
     agent_card_url = data.get('url')
 
     custom_headers = data.get('customHeaders', {})
+    route_through_agent_url = bool(data.get('routeThroughAgentUrl', False))
 
     if not agent_card_url:
         await sio.emit(
@@ -273,6 +337,9 @@ async def handle_initialize_client(sid: str, data: dict[str, Any]) -> None:
         httpx_client = httpx.AsyncClient(timeout=600.0, headers=custom_headers)
         card_resolver = get_card_resolver(httpx_client, agent_card_url)
         card = await card_resolver.get_agent_card()
+
+        if route_through_agent_url:
+            card = rewrite_card_urls(card, agent_card_url)
 
         a2a_config = ClientConfig(
             supported_transports=[

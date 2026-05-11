@@ -1826,6 +1826,29 @@ body.dark-mode.layout-v2 .slider {
     letter-spacing: 0;
 }
 
+.connection-checkbox-field {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: start;
+    gap: 8px;
+    cursor: pointer;
+}
+
+.connection-checkbox-field input[type="checkbox"] {
+    margin-top: 3px;
+}
+
+.connection-checkbox-text {
+    display: grid;
+    gap: 4px;
+    color: var(--v2-text);
+    font-size: 12px;
+}
+
+.connection-checkbox-title {
+    font-weight: 600;
+}
+
 .connection-auth-slot {
     border: 1px solid var(--v2-border);
     border-radius: var(--v2-radius);
