@@ -124,21 +124,25 @@ async def _process_a2a_response(
 def get_card_resolver(
     client: httpx.AsyncClient, agent_card_url: str
 ) -> A2ACardResolver:
-    """Returns an A2ACardResolver for the given agent card URL."""
+    """Returns an A2ACardResolver for the given URL.
+
+    If the URL already points at a card file (ends in ``.json`` or contains
+    ``/.well-known/``), the path is used as-is. Otherwise the URL is treated
+    as a base and the SDK is left to append its well-known card path.
+    """
     parsed_url = urlparse(agent_card_url)
     base_url = f'{parsed_url.scheme}://{parsed_url.netloc}'
     path_with_query = urlunparse(
         ('', '', parsed_url.path, '', parsed_url.query, '')
     )
-    card_path = path_with_query.lstrip('/')
-    if card_path:
-        card_resolver = A2ACardResolver(
-            client, base_url, agent_card_path=card_path
+    path = path_with_query
+    looks_like_card = path.endswith('.json') or '/.well-known/' in path
+    if looks_like_card:
+        return A2ACardResolver(
+            client, base_url, agent_card_path=path.lstrip('/')
         )
-    else:
-        card_resolver = A2ACardResolver(client, base_url)
-
-    return card_resolver
+    base_with_path = base_url + path.rstrip('/')
+    return A2ACardResolver(client, base_with_path)
 
 
 # ==============================================================================

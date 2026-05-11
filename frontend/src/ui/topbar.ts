@@ -72,8 +72,9 @@ const TEMPLATE = `
           <input id="topbar-profile-name" class="topbar-input" type="text" placeholder="Local assistant" aria-label="Connection name" />
         </label>
         <label class="connection-field">
-          <span>URL</span>
+          <span>Agent URL</span>
           <div class="topbar-url-slot" data-slot="url"></div>
+          <small class="connection-field-hint">Base URL of the agent, or a full agent card URL.</small>
         </label>
         <div class="connection-auth-slot" data-slot="headersPanel"></div>
       </div>
